@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<RulePack xmlns="xmlns://www.fortifysoftware.com/schema/rules"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="RulePack">
+    <RulePackID>4AEF134A-4C99-4431-A897-6F6663203903</RulePackID>
+    <SKU>SKU-4AEF134A-4C99-4431-A897-6F6663203903</SKU>
+    <Name><![CDATA[DumpLine.xml]]></Name>
+    <Version>1.0</Version>
+    <Description><![CDATA[Description for DumpLine.xml]]></Description>
+    <Rules version="19.10">
+        <RuleDefinitions>
+        </RuleDefinitions>
+        <ScriptDefinitions>
+        <Script formatVersion="3.5" type="post" name="no-pom-xml-xsd-finding"><![CDATA[
+		/*
+			This rule is to find if the vulnerability reported is actually the XSD for pom.xml
+			It will check if the rule is of the right type, read the XML document and match
+			the vuln to the line number and check. If it is, it will remove the vuln from
+			the data set.
+		*/
+		var debug = false;
+		var vulns = getVulnerabilities();
+
+        for each (var vuln in vulns) {
+			//alert(getMethods(vuln));
+			//alert(Object.keys(vuln));
+			primaryFile = vuln.getPrimaryFile();
+			
+			if ( debug ) {
+				alert(primaryFile);
+				var xmlFiles = getXMLConfigFileNames();
+				alert('****');
+				for each (var i in xmlFiles) {
+					alert(i);
+				}
+				alert('****');
+			}
+			if( primaryFile.contains("pom.xml") ){
+				var r = vuln.getSourceRule();
+				if ( 
+					r.getKingdom() == "Environment" &&
+					r.getCategory() == "Build Misconfiguration" &&
+					r.getSubcategory() == "External Maven Dependency Repository"
+				){
+					var validatorsFile = new XML(readFile(primaryFile));
+					var strValidatorsFile = validatorsFile.toString(); 
+					
+					// when converted to string, the XML header (<?xml version="1.0" encoding="UTF-8"?>) is omitted from the text
+					// so reported line numbers of vulns will be off by 1. And since its an array, we are already off by 1, so 
+					// we are really off by 2 w/r/t to the reported location of the vuln.
+					var lines = strValidatorsFile.split(/\r?\n/);
+					
+					if( debug ) {
+						alert(validatorsFile);
+						var i = 1;
+						for each(l in lines){
+							alert(i + ': ' + l);
+							i++;
+						}
+						alert(vuln.primaryLine);
+					}
+					
+					// print some useful information
+					alert('found candidate');
+					var finding = vuln.getInstanceIdentifier() + ":" + vuln.getSeverity() + ":" + r.getKingdom() + ":" + r.getCategory() + ":" + r.getSubcategory();
+				
+					// remember, we're off by 2 here
+					line = lines[vuln.primaryLine-2];
+
+					// check if this is the pom.xml definition header and remove if it is
+					if( line.indexOf('xsi:schemaLocation="http://maven.apache.org/POM') !== -1 ) {
+						alert('pom.xml definition found and it will be removed');
+						vuln.remove();
+					}
+				}
+			}
+        }
+        ]]></Script>
+        </ScriptDefinitions>
+    </Rules>
+</RulePack>
